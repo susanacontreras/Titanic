@@ -9,20 +9,17 @@ import numpy as np
 
 
 def basic_forest_no_categories(data):
-
+    """Use RandomForestRegression on numerical features only"""
     # exclude objects
     original_data = data.select_dtypes(exclude='object')  # exclude non-numerical data
-    print(original_data.columns)
+    # print(original_data.columns)
 
     y = original_data[['Survived']]
     # predictors=data[['PassengerId', 'Pclass', 'Age', 'SibSp', 'Parch', 'Fare']]
     predictors = original_data.drop(['Survived'], axis=1)
-    print(predictors.shape)
+    # print(predictors.shape)
 
     # split data into training and validation data, for both predictors and target
-    # The split is based on a random number generator. Supplying a numeric value to
-    # the random_state argument guarantees we get the same split every time we
-    # run this script.
     train_X, test_X, train_y, test_y = train_test_split(predictors, y, test_size=0.1, random_state = 0)
 
     # exclude missing values
@@ -35,28 +32,30 @@ def basic_forest_no_categories(data):
     print(titanic_model_split)
     titanic_model_split.fit(reduced_X_train, np.ravel(train_y))
     error_tree = mean_absolute_error(test_y, titanic_model_split.predict(reduced_X_test))
-    print(error_tree)
+    # print(error_tree)
+    return error_tree
 
 
-def basic_forest_add_categorical(data):
+def basic_forest_add_categorical(data, use_cabin=False):
+    """Use RandomForestRegression on all relevant features, substitute object into one-hot encodings. Decide if use
+    cabin data (first letter only), or not"""
 
     y = data[['Survived']]
-    predictors = data.drop(['Survived','Name','Ticket','Cabin'], axis=1)
-    # cols_with_missing = [col for col in predictors.columns
-    #                                  if predictors[col].isnull().any()]
-    # reduced_predictors = predictors.drop(cols_with_missing, axis=1)
-    # print(reduced_predictors.dtypes)
+    if use_cabin:
+        predictors = data.drop(['Survived', 'Name', 'Ticket'], axis=1)
+        # of cabin info, only take the level (letter) and not the number of the cabin
+        mycopy = predictors.copy()  # copy issue, does not update
+        for idx, el in enumerate(mycopy.Cabin):
+            if not pd.isna(el):
+                mycopy.Cabin[idx] = str(el)[0]
+        # function to substitute object into one-hot encodings
+        one_hot_encoded_training_predictors = pd.get_dummies(mycopy)
 
-    # of cabin info, only take the level (letter) and not the number of the cabin
-    # print(predictors.Cabin, 'kioi')
-    # auy = [str(el)[0] for el in reduced_predictors.Cabin]
-    # print(auy[:10])
+    else:
+        predictors = data.drop(['Survived', 'Name', 'Ticket', 'Cabin'], axis=1)
+        one_hot_encoded_training_predictors = pd.get_dummies(predictors)  # function to substitute object into one-hot encodings
 
     # split data into training and validation data, for both predictors and target
-    # The split is based on a random number generator. Supplying a numeric value to
-    # the random_state argument guarantees we get the same split every time we
-    # run this script.
-    one_hot_encoded_training_predictors = pd.get_dummies(predictors)  # function to substitute object into one-hot encodings
     print(one_hot_encoded_training_predictors.columns)
     train_X, test_X, train_y, test_y = train_test_split(one_hot_encoded_training_predictors, y, test_size=0.1, random_state = 0)
 
@@ -70,8 +69,8 @@ def basic_forest_add_categorical(data):
     titanic_model_split.fit(reduced_X_train, np.ravel(train_y))
 
     error_tree = mean_absolute_error(test_y, titanic_model_split.predict(reduced_X_test))
-    print(error_tree)
-
+    # print(error_tree)
+    return error_tree
 
 
 if __name__ == '__main__':
@@ -80,8 +79,10 @@ if __name__ == '__main__':
     test_filename = 'test.csv'
     data = pd.read_csv(train_filename)
     # NOTE: problem with categorical variables in plotting
-
+    # NOTE: to add new columns to the DataFrame, add them like dic, e.g. mydata['sex'] = sex
     # print(data.describe())
 
-    # basic_forest_no_categories(data)
-    basic_forest_add_categorical(data)
+    error_basic = basic_forest_no_categories(data)
+    error_no_cabin = basic_forest_add_categorical(data, use_cabin=False)
+    error_cabin = basic_forest_add_categorical(data, use_cabin=True)
+    print('Errors: basic', error_basic, 'no cabin:', error_no_cabin, 'cabin:', error_cabin)
