@@ -74,28 +74,54 @@ def basic_forest_add_categorical(data, use_cabin=False, impute=False, test_datas
         reduced_X_train = train_X.drop(cols_with_missing, axis=1)
         reduced_X_test = test_X.drop(cols_with_missing, axis=1)
 
-    titanic_model_split = RandomForestRegressor()
-    titanic_model_split.fit(reduced_X_train, np.ravel(train_y))
-
-    error_tree = mean_absolute_error(test_y, titanic_model_split.predict(reduced_X_test))
-
-
-    if not test_dataset:
-        return error_tree
-    else:
+    if test_dataset:
         # Read the test data
         test_filename = 'test.csv'
         test_data = pd.read_csv(test_filename)
-
+        print(test_data.columns, 'ooo')
+        col_predictions = predictors.columns
         # Treat the test data in the same way as training data. In this case, pull same columns.
-        test_X = test_data[col_predictiors]
-        predicted_prices = titanic_model_split.predict(test_X)
-        print(predicted_prices)
+        test_X = test_data[col_predictions]
+        # of cabin info, only take the level (letter) and not the number of the cabin
+        mycopy = test_X.copy()  # copy issue, does not update
+        for idx, el in enumerate(mycopy.Cabin):
+            if not pd.isna(el):
+                mycopy.Cabin[idx] = str(el)[0]
+        # function to substitute object into one-hot encodings
+        one_hot_encoded_testfile_predictors = pd.get_dummies(mycopy)
+
+        final_train, final_test = reduced_X_train.align(one_hot_encoded_testfile_predictors,
+                                                                             join='left', axis=1)
+        print('compare', final_train.columns)
+        # my_imputer = Imputer()
+        # final_test = my_imputer.fit_transform(final_test)
+        rows_with_missing = [row for row in final_test[:]
+                                         if final_test[row].isnull().any()]
+        final_test = final_test.drop(rows_with_missing, axis=1)
+        final_train, final_test = reduced_X_train.align(one_hot_encoded_testfile_predictors,
+                                                        join='left', axis=1)
+        # TODO: now test has 18 categries but there are NaNs
+        print(final_test.columns)
+
+        titanic_model_split = RandomForestRegressor()
+        titanic_model_split.fit(final_train, np.ravel(train_y))
+        print(final_test.shape)
+
+        people_survived = titanic_model_split.predict(final_test)
+
+        print(people_survived)
         # submit your results!
-        my_submission = pd.DataFrame({'Id': test.Id, 'SalePrice': predicted_prices})
+        my_submission = pd.DataFrame({'PassengerId': test_data.PassengerId, 'Survived': people_survived})
         # you could use any filename. We choose submission here
         my_submission.to_csv('submission.csv', index=False)
 
+    else:
+        titanic_model_split = RandomForestRegressor()
+        titanic_model_split.fit(reduced_X_train, np.ravel(train_y))
+
+    error_tree = mean_absolute_error(test_y, titanic_model_split.predict(reduced_X_test))
+
+    return error_tree
 
 
 if __name__ == '__main__':
@@ -108,6 +134,7 @@ if __name__ == '__main__':
     # print(data.describe())
 
     error_basic = basic_forest_no_categories(data)
-    error_no_cabin = basic_forest_add_categorical(data, use_cabin=False)
-    error_cabin = basic_forest_add_categorical(data, use_cabin=True)
+    error_no_cabin = basic_forest_add_categorical(data, use_cabin=False, test_dataset=False)
+    error_cabin = basic_forest_add_categorical(data, use_cabin=True, test_dataset=False)
+    error_no_cabin = 0
     print('Errors: basic', error_basic, 'no cabin:', error_no_cabin, 'cabin:', error_cabin)
